@@ -99,6 +99,9 @@ const CONFIG = {
   sigongServer: '바이젤'
 };
 
+const EXTRA = {
+  '2026-11-14': [{ time: '23:00', label: '시공 공격 GO', color: '#B48CFF' }]
+};
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const ORDER = [2, 3, 4, 5, 6, 0, 1];
 const MAINS = {
@@ -116,29 +119,34 @@ const FIXED = [
 
 const el = (id) => document.getElementById(id);
 const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const pad = (n) => String(n).padStart(2, '0');
+function keyFor(now, add) { const dt = new Date(Date.UTC(now.y, now.m - 1, now.d + add)); return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`; }
+function extrasFor(now, dayIdx) { const add = ((dayIdx - 2 + 7) % 7) - ((now.idx - 2 + 7) % 7); return EXTRA[keyFor(now, add)] || []; }
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 let selected = null;
 
 function seoulNow() {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', hour12: false, weekday: 'short', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', hour12: false, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date());
   const g = (t) => parts.find((p) => p.type === t).value;
   const map = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
-  return { idx: map[g('weekday')], min: (+g('hour') % 24) * 60 + +g('minute') };
+  return { y: +g('year'), m: +g('month'), d: +g('day'), idx: map[g('weekday')], min: (+g('hour') % 24) * 60 + +g('minute') };
 }
 
-function eventsFor(dayIdx) {
+function eventsFor(dayIdx, extras) {
   const byTime = {};
   FIXED.forEach((f) => f.times.forEach((t) => { (byTime[t] = byTime[t] || []).push(f.name); }));
   const list = Object.entries(byTime).map(([t, names]) => ({ t, name: names.join(' · ') }));
   const mn = MAINS[DAYS[dayIdx]];
   if (mn) list.push({ t: mn.time, name: mn.label });
+  (extras || []).forEach((e) => list.push({ t: e.time, name: e.label }));
   return list.sort((a, b) => toMin(a.t) - toMin(b.t));
 }
 
 function nextEvent(now) {
   for (let add = 0; add < 8; add++) {
     const idx = (now.idx + add) % 7;
-    for (const e of eventsFor(idx)) {
+    const k = keyFor(now, add);
+    for (const e of eventsFor(idx, EXTRA[k])) {
       const diff = add * 1440 + toMin(e.t) - now.min;
       if (diff > 0) return { ...e, diff, add };
     }
@@ -182,7 +190,11 @@ function render() {
   const main = el('main'); main.innerHTML = '';
   if (mn) {
     main.append(mk('div', 'lab', isToday ? '오늘의 메인' : `${sd}요일 메인`));
+    const ex = extrasFor(now, selected);
+    const many = ex.length > 0;
     const row = mk('div', 'row'); row.append(mk('span', null, mn.time), mk('span', 'n', mn.label)); main.append(row);
+    ex.forEach((e) => { const r = mk('div', 'row'); const n = mk('span', 'n', e.label); if (e.color) n.style.color = e.color; r.append(mk('span', null, e.time), n); main.append(r); });
+    if (many) main.querySelectorAll('.row span').forEach((s) => { s.style.fontSize = 'calc(52 * var(--u))'; });
     if (mn.sub) main.append(mk('div', 'sub', mn.sub));
   } else {
     main.append(mk('div', 'lab gray', isToday ? '오늘의 메인' : `${sd}요일 메인`));
