@@ -41,6 +41,9 @@
   .main .row { display: flex; align-items: baseline; gap: calc(22 * var(--u)); }
   .main .row span { font-size: calc(64 * var(--u)); line-height: 1; font-weight: 900; letter-spacing: -0.01em; }
   .main .row .n { color: var(--accent); }
+  .main .col { position: relative; display: inline-block; }
+  .main .row:has(.col) { margin-bottom: calc(46 * var(--u)); }
+  .main .row .col .rsub { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font-size: max(12px, calc(24 * var(--u))); font-weight: 700; color: #C9C6C0; line-height: 1.3; margin-top: calc(6 * var(--u)); letter-spacing: 0; }
   .main .sub { font-size: max(13px, calc(17 * var(--u))); color: #C9C6C0; }
   .main .none { font-size: calc(30 * var(--u)); font-weight: 700; line-height: 1.3; color: #FFFFFF; }
   .next { margin-top: calc(8 * var(--u)); padding-top: calc(14 * var(--u)); border-top: 1px solid #2A2A2E; display: flex; align-items: baseline; flex-wrap: wrap; gap: calc(6 * var(--u)) calc(12 * var(--u)); font-size: max(13px, calc(17 * var(--u))); color: #C9C6C0; }
@@ -92,26 +95,28 @@
 </main>
 
 <script>
-const CONFIG = {
-  faction: '서부',
-  artifactTime: '22:30',
-  artifactServer: '이스할겐 (동부)',
-  sigongServer: '바이젤'
-};
+const PERIODS = [
+  { from: '0000-00-00', faction: '서부', artifactTime: '22:30', nahmaTime: '22:30', artifactServer: '이스할겐 (동부)', sigongServer: '바이젤' },
+  { from: '2026-11-18', faction: '동부', artifactTime: '23:00', nahmaTime: '23:00', artifactServer: '무닌 (서부)', sigongServer: '바이젤' }
+];
+function cfgFor(key) { let c = PERIODS[0]; for (const p of PERIODS) if (key >= p.from) c = p; return c; }
+function mainsFor(c) {
+  return {
+    '화': { time: '22:00', label: '균열지대', sub: '' },
+    '목': { time: '22:00', label: '균열지대', sub: '' },
+    '수': { time: c.artifactTime, label: '아티팩트', sub: '' },
+    '토': { time: c.artifactTime, label: '아티팩트', sub: '' },
+    '금': { time: c.nahmaTime, label: '나흐마', sub: '보스 컨텐츠' },
+    '일': { time: c.nahmaTime, label: '나흐마', sub: '보스 컨텐츠' }
+  };
+}
 
 const EXTRA = {
-  '2026-11-14': [{ time: '23:00', label: '시공 공격', color: '#B48CFF' }]
+  '2026-11-14': [{ time: '23:00', label: '시공 공격', color: '#B48CFF' }],
+  '2026-11-18': [{ time: '20:00', label: '서버이전', sub: '마르쿠탄 → 파프니르', color: '#F2D594' }]
 };
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const ORDER = [2, 3, 4, 5, 6, 0, 1];
-const MAINS = {
-  '화': { time: '22:00', label: '균열지대', sub: '' },
-  '목': { time: '22:00', label: '균열지대', sub: '' },
-  '수': { time: CONFIG.artifactTime, label: '아티팩트', sub: '' },
-  '토': { time: CONFIG.artifactTime, label: '아티팩트', sub: '' },
-  '금': { time: '22:30', label: '나흐마', sub: '보스 컨텐츠' },
-  '일': { time: '22:30', label: '나흐마', sub: '보스 컨텐츠' }
-};
 const FIXED = [
   { name: '카이라', times: ['01:00', '09:00', '13:00', '21:00'] },
   { name: '아그로', times: ['09:00', '21:00'] }
@@ -121,7 +126,8 @@ const el = (id) => document.getElementById(id);
 const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const pad = (n) => String(n).padStart(2, '0');
 function keyFor(now, add) { const dt = new Date(Date.UTC(now.y, now.m - 1, now.d + add)); return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`; }
-function extrasFor(now, dayIdx) { const add = ((dayIdx - 2 + 7) % 7) - ((now.idx - 2 + 7) % 7); return EXTRA[keyFor(now, add)] || []; }
+function mainFor(now, dayIdx) { const k = keyFor(now, (dayIdx - now.idx + 7) % 7); return mainsFor(cfgFor(k))[DAYS[dayIdx]]; }
+function extrasFor(now, dayIdx) { const add = (dayIdx - now.idx + 7) % 7; return EXTRA[keyFor(now, add)] || []; }
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 let selected = null;
 
@@ -132,11 +138,10 @@ function seoulNow() {
   return { y: +g('year'), m: +g('month'), d: +g('day'), idx: map[g('weekday')], min: (+g('hour') % 24) * 60 + +g('minute') };
 }
 
-function eventsFor(dayIdx, extras) {
+function eventsFor(dayIdx, extras, mn) {
   const byTime = {};
   FIXED.forEach((f) => f.times.forEach((t) => { (byTime[t] = byTime[t] || []).push(f.name); }));
   const list = Object.entries(byTime).map(([t, names]) => ({ t, name: names.join(' · ') }));
-  const mn = MAINS[DAYS[dayIdx]];
   if (mn) list.push({ t: mn.time, name: mn.label });
   (extras || []).forEach((e) => list.push({ t: e.time, name: e.label }));
   return list.sort((a, b) => toMin(a.t) - toMin(b.t));
@@ -146,7 +151,7 @@ function nextEvent(now) {
   for (let add = 0; add < 8; add++) {
     const idx = (now.idx + add) % 7;
     const k = keyFor(now, add);
-    for (const e of eventsFor(idx, EXTRA[k])) {
+    for (const e of eventsFor(idx, EXTRA[k], mainsFor(cfgFor(k))[DAYS[idx]])) {
       const diff = add * 1440 + toMin(e.t) - now.min;
       if (diff > 0) return { ...e, diff, add };
     }
@@ -157,10 +162,6 @@ function nextEvent(now) {
 const fmt = (min) => { const h = Math.floor(min / 60), m = min % 60; return h ? `${h}시간 ${m}분` : `${m}분`; };
 
 function renderStatic() {
-  const c = CONFIG.faction === '동부' ? '#A178FF' : '#4A8DF8';
-  el('artTile').style.background = c; el('artVs').style.color = c;
-  el('artName').textContent = CONFIG.artifactServer;
-  el('sigName').textContent = CONFIG.sigongServer;
   const fx = el('fixed');
   FIXED.forEach((f) => {
     const box = mk('div', 'boss');
@@ -173,10 +174,15 @@ function renderStatic() {
 function render() {
   const now = seoulNow();
   if (selected === null) selected = now.idx;
+  const cfg = cfgFor(keyFor(now, (selected - now.idx + 7) % 7));
+  const fc = cfg.faction === '동부' ? '#A178FF' : '#4A8DF8';
+  el('artTile').style.background = fc; el('artVs').style.color = fc;
+  el('artName').textContent = cfg.artifactServer;
+  el('sigName').textContent = cfg.sigongServer;
 
   const wk = el('week'); wk.innerHTML = '';
-  ORDER.forEach((i) => {
-    const d = DAYS[i], m = MAINS[d];
+  [0, 1, 2, 3, 4, 5, 6].map((k) => (now.idx + k) % 7).forEach((i) => {
+    const d = DAYS[i], m = mainFor(now, i);
     const b = mk('button'); b.type = 'button';
     b.setAttribute('aria-pressed', String(i === selected));
     b.setAttribute('aria-label', `${d}요일${i === now.idx ? ' (오늘)' : ''}`);
@@ -186,15 +192,23 @@ function render() {
     wk.append(b);
   });
 
-  const isToday = selected === now.idx, sd = DAYS[selected], mn = MAINS[sd];
+  const isToday = selected === now.idx, sd = DAYS[selected], mn = mainFor(now, selected);
   const main = el('main'); main.innerHTML = '';
   if (mn) {
     main.append(mk('div', 'lab', isToday ? '오늘의 메인' : `${sd}요일 메인`));
     const ex = extrasFor(now, selected);
-    const many = ex.length > 0;
-    const row = mk('div', 'row'); row.append(mk('span', null, mn.time), mk('span', 'n', mn.label)); main.append(row);
-    ex.forEach((e) => { const r = mk('div', 'row'); const n = mk('span', 'n', e.label); if (e.color) n.style.color = e.color; r.append(mk('span', null, e.time), n); main.append(r); });
-    if (many) main.querySelectorAll('.row span').forEach((s) => { s.style.fontSize = 'calc(52 * var(--u))'; });
+    const rows = [{ time: mn.time, label: mn.label }, ...ex].sort((a, b) => a.time.localeCompare(b.time));
+    rows.forEach((r) => {
+      const row = mk('div', 'row');
+      const n = mk('span', 'n', r.label); if (r.color) n.style.color = r.color;
+      if (ex.length) { n.style.fontSize = 'calc(48 * var(--u))'; }
+      const t1 = mk('span', null, r.time); if (ex.length) t1.style.fontSize = 'calc(48 * var(--u))';
+      if (r.sub) {
+        const col = mk('span', 'col'); col.append(n, mk('span', 'rsub', r.sub));
+        row.append(t1, col); row.style.marginBottom = 'calc(46 * var(--u))';
+      } else row.append(t1, n);
+      main.append(row);
+    });
     if (mn.sub) main.append(mk('div', 'sub', mn.sub));
   } else {
     main.append(mk('div', 'lab gray', isToday ? '오늘의 메인' : `${sd}요일 메인`));
