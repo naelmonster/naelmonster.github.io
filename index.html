@@ -18,6 +18,11 @@
   .hero .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 62%; background: linear-gradient(to bottom, rgba(17,17,19,0) 0%, rgba(17,17,19,0.72) 50%, #111113 100%); }
   .hero .title { position: absolute; left: 50%; bottom: calc(22 * var(--u)); transform: translateX(-50%); width: calc(580 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(14 * var(--u)) rgba(0,0,0,0.65)); }
   .chip { position: absolute; top: calc(20 * var(--u)); left: calc(20 * var(--u)); background: rgba(17,17,19,0.78); border: 1px solid #D9B26A; color: #F2D594; font-size: max(11px, calc(13 * var(--u))); font-weight: 900; letter-spacing: 0.06em; padding: calc(6 * var(--u)) calc(12 * var(--u)); border-radius: 999px; }
+  .alert { background: #F2D594; color: #111113; border-radius: calc(14 * var(--u)); padding: calc(20 * var(--u)) calc(24 * var(--u)); display: flex; flex-direction: column; gap: calc(8 * var(--u)); }
+  .alert[hidden] { display: none; }
+  .alert .badge { align-self: flex-start; background: #111113; color: #F2D594; font-size: max(10px, calc(12 * var(--u))); font-weight: 900; letter-spacing: 0.1em; padding: calc(4 * var(--u)) calc(10 * var(--u)); border-radius: calc(6 * var(--u)); }
+  .alert .ttl { font-size: calc(40 * var(--u)); font-weight: 900; line-height: 1.1; }
+  .alert .msg { font-size: max(13px, calc(20 * var(--u))); font-weight: 700; color: #3A2E14; line-height: 1.4; }
   .servers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(10 * var(--u)); }
   .srv { border-radius: calc(10 * var(--u)); padding: calc(12 * var(--u)) calc(16 * var(--u)); display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--u)); color: #111113; min-height: calc(48 * var(--u)); }
   .srv .lab { display: flex; align-items: center; gap: calc(8 * var(--u)); font-size: max(12px, calc(14 * var(--u))); font-weight: 900; white-space: nowrap; }
@@ -70,6 +75,8 @@
     <div class="chip">마족 1위 레기온</div>
   </header>
 
+  <section class="alert" id="alert" role="alert" hidden><span class="badge">공지</span><div class="ttl" id="alertTtl"></div><div class="msg" id="alertMsg"></div></section>
+
   <section class="servers" aria-label="상대 서버">
     <div class="srv" id="artTile"><div class="lab"><span class="vs" id="artVs">VS</span>아티팩트</div><div class="name" id="artName"></div></div>
     <div class="srv" style="background:#B48CFF"><div class="lab"><span class="vs" style="color:#B48CFF">VS</span>시공</div><div class="name" id="sigName"></div></div>
@@ -113,7 +120,8 @@ function mainsFor(c) {
 
 const EXTRA = {
   '2026-11-14': [{ time: '23:00', label: '시공 공격', color: '#B48CFF' }],
-  '2026-11-18': [{ time: '20:00', label: '서버이전', sub: '마르쿠탄 → 파프니르', color: '#F2D594' }]
+  '2026-11-17': [{ banner: true, label: '서버 이전 준비', sub: '내일(수) 20:00 서버 이전 전까지 준비를 완료해 주세요.' }],
+  '2026-11-18': [{ banner: true, label: '서버 이전 준비', sub: '오늘 20:00 서버 이전 전까지 준비를 완료해 주세요.' }, { time: '20:00', label: '서버이전', sub: '마르쿠탄 → 파프니르', color: '#F2D594' }]
 };
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const ORDER = [2, 3, 4, 5, 6, 0, 1];
@@ -143,7 +151,7 @@ function eventsFor(dayIdx, extras, mn) {
   FIXED.forEach((f) => f.times.forEach((t) => { (byTime[t] = byTime[t] || []).push(f.name); }));
   const list = Object.entries(byTime).map(([t, names]) => ({ t, name: names.join(' · ') }));
   if (mn) list.push({ t: mn.time, name: mn.label });
-  (extras || []).forEach((e) => list.push({ t: e.time, name: e.label }));
+  (extras || []).filter((e) => !e.banner && e.time).forEach((e) => list.push({ t: e.time, name: e.label }));
   return list.sort((a, b) => toMin(a.t) - toMin(b.t));
 }
 
@@ -175,6 +183,9 @@ function render() {
   const now = seoulNow();
   if (selected === null) selected = now.idx;
   const cfg = cfgFor(keyFor(now, (selected - now.idx + 7) % 7));
+  const bn = extrasFor(now, selected).find((e) => e.banner);
+  el('alert').hidden = !bn;
+  if (bn) { el('alertTtl').textContent = bn.label; el('alertMsg').textContent = bn.sub || ''; }
   const fc = cfg.faction === '동부' ? '#A178FF' : '#4A8DF8';
   el('artTile').style.background = fc; el('artVs').style.color = fc;
   el('artName').textContent = cfg.artifactServer;
@@ -196,7 +207,7 @@ function render() {
   const main = el('main'); main.innerHTML = '';
   if (mn) {
     main.append(mk('div', 'lab', isToday ? '오늘의 메인' : `${sd}요일 메인`));
-    const ex = extrasFor(now, selected);
+    const ex = extrasFor(now, selected).filter((e) => !e.banner);
     const rows = [{ time: mn.time, label: mn.label }, ...ex].sort((a, b) => a.time.localeCompare(b.time));
     rows.forEach((r) => {
       const row = mk('div', 'row');
