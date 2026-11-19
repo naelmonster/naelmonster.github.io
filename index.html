@@ -79,7 +79,7 @@
 
   <section class="servers" aria-label="상대 서버">
     <div class="srv" id="artTile"><div class="lab"><span class="vs" id="artVs">VS</span>아티팩트</div><div class="name" id="artName"></div></div>
-    <div class="srv" style="background:#B48CFF"><div class="lab"><span class="vs" style="color:#B48CFF">VS</span>시공</div><div class="name" id="sigName"></div></div>
+    <div class="srv" id="sigTile" style="background:#B48CFF"><div class="lab"><span class="vs" id="sigVs" style="color:#B48CFF">VS</span>시공</div><div class="name" id="sigName"></div></div>
   </section>
 
   <div class="divider"><span></span><h2>컨텐츠 일정</h2><span></span></div>
@@ -104,7 +104,7 @@
 <script>
 const PERIODS = [
   { from: '0000-00-00', faction: '서부', artifactTime: '22:30', nahmaTime: '22:30', artifactServer: '이스할겐 (동부)', sigongServer: '바이젤' },
-  { from: '2026-11-18', faction: '동부', artifactTime: '23:00', nahmaTime: '23:00', artifactServer: '무닌 (서부)', sigongServer: '바이젤' }
+  { from: '2026-11-18', faction: '동부', artifactTime: '23:00', nahmaTime: '23:00', artifactServer: '무닌', sigongServer: '코치룽', artColor: '#4A8DF8', sigColor: '#7FC4FF' }
 ];
 function cfgFor(key) { let c = PERIODS[0]; for (const p of PERIODS) if (key >= p.from) c = p; return c; }
 function mainsFor(c) {
@@ -119,6 +119,7 @@ function mainsFor(c) {
 }
 
 const EXTRA = {
+  '2026-11-25': [{ replace: true, label: '어비스 · 시공 매칭 변경', short: '매칭 변경', color: '#F2D594' }],
   '2026-11-14': [{ time: '23:00', label: '시공 공격', color: '#B48CFF' }],
   '2026-11-17': [{ banner: true, label: '서버 이전 준비', sub: '내일(수) 20:00 서버 이전 전까지 준비를 완료해 주세요.' }],
   '2026-11-18': [{ banner: true, label: '서버 이전 준비', sub: '오늘 20:00 서버 이전 전까지 준비를 완료해 주세요.' }, { time: '20:00', label: '서버이전', sub: '마르쿠탄 → 파프니르', color: '#F2D594' }]
@@ -134,7 +135,7 @@ const el = (id) => document.getElementById(id);
 const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const pad = (n) => String(n).padStart(2, '0');
 function keyFor(now, add) { const dt = new Date(Date.UTC(now.y, now.m - 1, now.d + add)); return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`; }
-function mainFor(now, dayIdx) { const k = keyFor(now, (dayIdx - now.idx + 7) % 7); return mainsFor(cfgFor(k))[DAYS[dayIdx]]; }
+function mainFor(now, dayIdx) { const k = keyFor(now, (dayIdx - now.idx + 7) % 7); const rep = (EXTRA[k] || []).find((e) => e.replace); if (rep) return { time: '', label: rep.label, short: rep.short, color: rep.color, sub: '' }; return mainsFor(cfgFor(k))[DAYS[dayIdx]]; }
 function extrasFor(now, dayIdx) { const add = (dayIdx - now.idx + 7) % 7; return EXTRA[keyFor(now, add)] || []; }
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 let selected = null;
@@ -159,7 +160,8 @@ function nextEvent(now) {
   for (let add = 0; add < 8; add++) {
     const idx = (now.idx + add) % 7;
     const k = keyFor(now, add);
-    for (const e of eventsFor(idx, EXTRA[k], mainsFor(cfgFor(k))[DAYS[idx]])) {
+    const rep = (EXTRA[k] || []).find((e) => e.replace);
+    for (const e of eventsFor(idx, EXTRA[k], rep ? null : mainsFor(cfgFor(k))[DAYS[idx]])) {
       const diff = add * 1440 + toMin(e.t) - now.min;
       if (diff > 0) return { ...e, diff, add };
     }
@@ -186,8 +188,10 @@ function render() {
   const bn = extrasFor(now, selected).find((e) => e.banner);
   el('alert').hidden = !bn;
   if (bn) { el('alertTtl').textContent = bn.label; el('alertMsg').textContent = bn.sub || ''; }
-  const fc = cfg.faction === '동부' ? '#A178FF' : '#4A8DF8';
+  const fc = cfg.artColor || (cfg.faction === '동부' ? '#A178FF' : '#4A8DF8');
   el('artTile').style.background = fc; el('artVs').style.color = fc;
+  const sc = cfg.sigColor || '#B48CFF';
+  el('sigTile').style.background = sc; el('sigVs').style.color = sc;
   el('artName').textContent = cfg.artifactServer;
   el('sigName').textContent = cfg.sigongServer;
 
@@ -198,7 +202,7 @@ function render() {
     b.setAttribute('aria-pressed', String(i === selected));
     b.setAttribute('aria-label', `${d}요일${i === now.idx ? ' (오늘)' : ''}`);
     if (i === now.idx) b.classList.add('today');
-    b.append(mk('span', 'd', d), mk('span', 'c', m ? m.label : '–'));
+    b.append(mk('span', 'd', d), mk('span', 'c', m ? (m.short || m.label) : '–'));
     b.addEventListener('click', () => { selected = i; render(); });
     wk.append(b);
   });
@@ -207,17 +211,18 @@ function render() {
   const main = el('main'); main.innerHTML = '';
   if (mn) {
     main.append(mk('div', 'lab', isToday ? '오늘의 메인' : `${sd}요일 메인`));
-    const ex = extrasFor(now, selected).filter((e) => !e.banner);
-    const rows = [{ time: mn.time, label: mn.label }, ...ex].sort((a, b) => a.time.localeCompare(b.time));
+    const ex = extrasFor(now, selected).filter((e) => !e.banner && !e.replace);
+    const rows = [{ time: mn.time, label: mn.label, color: mn.color }, ...ex].sort((a, b) => a.time.localeCompare(b.time));
     rows.forEach((r) => {
       const row = mk('div', 'row');
       const n = mk('span', 'n', r.label); if (r.color) n.style.color = r.color;
       if (ex.length) { n.style.fontSize = 'calc(48 * var(--u))'; }
       const t1 = mk('span', null, r.time); if (ex.length) t1.style.fontSize = 'calc(48 * var(--u))';
+      if (!r.time) { n.style.fontSize = 'calc(48 * var(--u))'; }
       if (r.sub) {
         const col = mk('span', 'col'); col.append(n, mk('span', 'rsub', r.sub));
         row.append(t1, col); row.style.marginBottom = 'calc(46 * var(--u))';
-      } else row.append(t1, n);
+      } else if (r.time) row.append(t1, n); else row.append(n);
       main.append(row);
     });
     if (mn.sub) main.append(mk('div', 'sub', mn.sub));
