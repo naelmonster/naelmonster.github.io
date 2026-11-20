@@ -136,6 +136,10 @@
   .past details[open] summary { border-bottom: 1px solid #2A2A2E; }
   .past details .wt { border-radius: 0; }
   .empty2 { font-size: max(13px, calc(16 * var(--u))); color: #9C9CA3; background: #19191C; border-radius: calc(12 * var(--u)); padding: calc(20 * var(--u)); text-align: center; line-height: 1.5; }
+  .mu-title .camp { font-size: max(11px, calc(14 * var(--u))); font-weight: 700; color: #9C9CA3; margin-left: calc(6 * var(--u)); }
+  .mu-title .nm { font-weight: 900; }
+  .legend { margin-bottom: calc(8 * var(--u)); }
+  .past details .legend { padding: calc(10 * var(--u)) calc(14 * var(--u)) 0; margin: 0; }
   .notice { border-top: 1px solid #2A2A2E; padding-top: calc(16 * var(--u)); display: flex; flex-direction: column; gap: calc(6 * var(--u)); font-size: max(12px, calc(15 * var(--u))); color: #C9C6C0; margin-top: calc(8 * var(--u)); }
   .notice b { font-size: max(11px, calc(13 * var(--u))); color: var(--accent); letter-spacing: 0.12em; }
 </style>
@@ -182,11 +186,10 @@
       <button type="button" role="tab" id="segNow" aria-selected="true">이번 매칭</button>
       <button type="button" role="tab" id="segPast" aria-selected="false">과거 매칭</button>
     </div>
-    <div class="legend"><span><i class="dot ma"></i>마족</span><span><i class="dot cheon"></i>천족</span><span><i class="dot none"></i>미점령</span></div>
     <section id="muNow"></section>
     <section id="muPast" hidden></section>
     <section id="artSec" hidden>
-      <p class="sec-lab">아티팩트별 마족 점령률 · 전체 기록</p>
+      <p class="sec-lab">아티팩트별 우리 점령률 · 전체 기록</p>
       <div class="rate-grid" id="artRates"></div>
     </section>
   </div>
@@ -339,33 +342,62 @@ function render() {
 }
 
 const ZONES = [{ name: '하층', arts: ['뿌리', '시엘', '유황'] }, { name: '중층', arts: ['중앙', '늪지', '고목'] }];
-const OUR = '마';
+const WEST = ['시엘','바이젤','트리니엘','카이시넬','마르쿠탄','유스티엘','아리엘','프레기온','메스람타에다','나니아','루드라','무닌','페르노스','오다르','다미누','카사카','바카르마','크로메데','챈가룽','이슈타르','포에타'];
+const EAST = ['지켈','바바룽','아스펠','루미엘','이스할겐','에레슈키갈','네몬','코치룽','울고른','젠카카','브리트라','파프니르','콰이링','인드나흐','루터스','타하바타','네자칸','하달','히타니에','이스라펠','티아마트'];
+const CAMP_COLOR = { '동부': '#B48CFF', '서부': '#5FA8FF' };
+const campOf = (s) => (EAST.includes(s) ? '동부' : WEST.includes(s) ? '서부' : '');
 let recAll = [], muList = [];
 function fmtDate(s) {
   const [y, m, d] = s.split('-').map(Number);
   const w = DAYS[(new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7];
   return `${m}.${d} (${w})`;
 }
-function cells(r) { return ZONES.map((zn) => { const s = String(r[zn.name] || '').replace(/\s/g, '').split(''); return [0, 1, 2].map((i) => s[i] || '-'); }); }
+function cells(r) {
+  const ourRace = (r.usRace || '마족').charAt(0);
+  return ZONES.map((zn) => {
+    const s = String(r[zn.name] || '').replace(/\s/g, '').split('');
+    return [0, 1, 2].map((i) => {
+      const c = s[i] || '-';
+      if (c === '우') return 'U'; if (c === '상') return 'T';
+      if (c === '마' || c === '천') return c === ourRace ? 'U' : 'T';
+      return 'N';
+    });
+  });
+}
 function buildMatchups() {
   const map = new Map();
   recAll.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((r) => {
     const key = `${r.us || ''}|${r.vs || ''}`;
-    if (!map.has(key)) map.set(key, { us: r.us || '우리', vs: r.vs || '상대', wars: [] });
-    map.get(key).wars.push(r);
+    if (!map.has(key)) map.set(key, { us: r.us || '우리', vs: r.vs || '상대', usRace: '', vsRace: '', wars: [] });
+    const m = map.get(key); if (r.usRace) m.usRace = r.usRace; if (r.vsRace) m.vsRace = r.vsRace; m.wars.push(r);
   });
   muList = [...map.values()].map((m) => {
     let cu = 0, ct = 0;
     m.wars.forEach((w, i) => {
-      const f = cells(w).flat(); const u = f.filter((c) => c === OUR).length, th = f.filter((c) => c !== OUR && c !== '-').length;
+      const f = cells(w).flat(); const u = f.filter((c) => c === 'U').length, th = f.filter((c) => c === 'T').length;
       cu += u; ct += th; Object.assign(w, { n: i + 1, cs: cells(w), du: u, dt: th, cu, ct });
     });
-    return { ...m, cu, ct, first: m.wars[0].date, last: m.wars[m.wars.length - 1].date };
+    const usCamp = campOf(m.us), vsCamp = campOf(m.vs);
+    const usColor = CAMP_COLOR[usCamp] || '#B48CFF';
+    let vsColor = CAMP_COLOR[vsCamp] || '#5FA8FF'; if (vsColor === usColor) vsColor = usColor === '#5FA8FF' ? '#B48CFF' : '#5FA8FF';
+    return { ...m, cu, ct, usCamp, vsCamp, usColor, vsColor, first: m.wars[0].date, last: m.wars[m.wars.length - 1].date };
   }).sort((a, b) => String(b.last).localeCompare(String(a.last)));
 }
-function scoreEl(u, th) {
-  const s = mk('span', 'sc'); s.append(mk('span', 'ma', String(u)), mk('span', 'sep', ':'), mk('span', 'cheon', String(th))); return s;
+function scoreEl(u, th, m) {
+  const s = mk('span', 'sc');
+  const a = mk('span', null, String(u)); a.style.color = m.usColor;
+  const b = mk('span', null, String(th)); b.style.color = m.vsColor;
+  s.append(a, mk('span', 'sep', ':'), b); return s;
 }
+function dotEl(color) { const d = mk('i', 'dot'); d.style.background = color; d.style.boxShadow = `0 0 0 2px ${color}40`; return d; }
+function legendEl(m) {
+  const lg = mk('div', 'legend');
+  const a = mk('span'); a.append(dotEl(m.usColor), m.us);
+  const b = mk('span'); b.append(dotEl(m.vsColor), m.vs);
+  const c = mk('span'); c.append(mk('i', 'dot none'), '미점령');
+  lg.append(a, b, c); return lg;
+}
+function sideLabel(camp, race) { return [camp, race].filter(Boolean).join(' · '); }
 function table(m) {
   const tb = mk('table', 'wt');
   const thead = mk('thead'), h1 = mk('tr'), h2 = mk('tr');
@@ -380,12 +412,12 @@ function table(m) {
     const td = mk('td', 'c-date'); td.append(mk('b', null, `${w.n}차전`), mk('small', null, fmtDate(w.date))); tr.append(td);
     w.cs.forEach((z, zi) => z.forEach((c, ci) => {
       const cell = mk('td', zi && !ci ? 'gap' : '');
-      const d = mk('i', 'dot ' + (c === '마' ? 'ma' : c === '천' ? 'cheon' : 'none'));
-      d.setAttribute('aria-label', `${ZONES[zi].arts[ci]} ${c === '마' ? '마족' : c === '천' ? '천족' : '미점령'}`);
+      const d = c === 'U' ? dotEl(m.usColor) : c === 'T' ? dotEl(m.vsColor) : mk('i', 'dot none');
+      d.setAttribute('aria-label', `${ZONES[zi].arts[ci]} ${c === 'U' ? m.us : c === 'T' ? m.vs : '미점령'}`);
       cell.append(d); tr.append(cell);
     }));
-    const s1 = mk('td', 'c-sc gap'); s1.append(scoreEl(w.du, w.dt));
-    const s2 = mk('td', 'c-sc'); s2.append(scoreEl(w.cu, w.ct));
+    const s1 = mk('td', 'c-sc gap'); s1.append(scoreEl(w.du, w.dt, m));
+    const s2 = mk('td', 'c-sc'); s2.append(scoreEl(w.cu, w.ct, m));
     tr.append(s1, s2); tbody.append(tr);
   });
   tb.append(tbody); return tb;
@@ -402,20 +434,24 @@ function renderRecords() {
     el('artSec').hidden = true; return;
   }
   const cur = muList[0];
-  const title = mk('div', 'mu-title'); title.append(mk('span', 'ma', cur.us), mk('span', 'x', 'VS'), mk('span', 'cheon', cur.vs));
-  const tot = mk('div', 'mu-total'); tot.append('누적 ', scoreEl(cur.cu, cur.ct), ` · ${verdict(cur.cu, cur.ct)}`);
+  const title = mk('div', 'mu-title');
+  const n1 = mk('span', 'nm', cur.us); n1.style.color = cur.usColor;
+  const n2 = mk('span', 'nm', cur.vs); n2.style.color = cur.vsColor;
+  title.append(n1, mk('span', 'camp', sideLabel(cur.usCamp, cur.usRace)), mk('span', 'x', 'VS'), n2, mk('span', 'camp', sideLabel(cur.vsCamp, cur.vsRace)));
+  const tot = mk('div', 'mu-total'); tot.append('누적 ', scoreEl(cur.cu, cur.ct, cur), ` · ${verdict(cur.cu, cur.ct)}`);
   head.append(title, mk('div', 'mu-meta', `${cur.wars.length}차전 진행 · ${fmtDate(cur.first)} ~ ${fmtDate(cur.last)}`), tot);
-  now.append(table(cur));
+  now.append(legendEl(cur), table(cur));
   const olds = muList.slice(1);
   if (!olds.length) past.append(mk('div', 'empty2', '지난 매칭 기록이 없어요.'));
   else {
     const wrap = mk('div', 'past');
     olds.forEach((m) => {
       const dt = mk('details'), sm = mk('summary');
-      const left = mk('div'); const pt = mk('div', 'pt'); pt.append(mk('span', null, `vs ${m.vs}`));
+      const left = mk('div'); const pt = mk('div', 'pt');
+      const v = mk('span', null, m.vs); v.style.color = m.vsColor; pt.append('vs ', v);
       left.append(pt, mk('div', 'pm', `${m.us} · ${fmtDate(m.first)} ~ ${fmtDate(m.last)} · ${m.wars.length}차전`));
-      const right = mk('div', 'pr'); right.append(scoreEl(m.cu, m.ct));
-      sm.append(left, right); dt.append(sm, table(m)); wrap.append(dt);
+      const right = mk('div', 'pr'); right.append(scoreEl(m.cu, m.ct, m));
+      sm.append(left, right); dt.append(sm, legendEl(m), table(m)); wrap.append(dt);
     });
     past.append(wrap);
   }
@@ -423,8 +459,8 @@ function renderRecords() {
   ZONES.forEach((zn, zi) => {
     const line = mk('div', 'rate-zone'); line.append(mk('span', null, zn.name));
     zn.arts.forEach((a, ai) => {
-      const vals = recAll.map((r) => cells(r)[zi][ai]).filter((v) => v !== '-');
-      const w = vals.filter((v) => v === OUR).length;
+      const vals = recAll.map((r) => cells(r)[zi][ai]).filter((v) => v !== 'N');
+      const w = vals.filter((v) => v === 'U').length;
       const box = mk('div', 'rate');
       box.append(mk('b', null, a), mk('strong', null, vals.length ? Math.round((w / vals.length) * 100) + '%' : '–'), mk('small', null, `${w}/${vals.length}`));
       line.append(box);
@@ -439,11 +475,26 @@ function showSeg(pastOn) {
 }
 el('segNow').addEventListener('click', () => showSeg(false));
 el('segPast').addEventListener('click', () => showSeg(true));
+function lenientParse(txt) {
+  let out = '', i = 0, inStr = false;
+  while (i < txt.length) {
+    const c = txt[i], n = txt[i + 1];
+    if (inStr) { out += c; if (c === '\\') { out += n || ''; i += 2; continue; } if (c === '"') inStr = false; i++; continue; }
+    if (c === '"' || c === '“' || c === '”') { out += '"'; inStr = true; i++; continue; }
+    if (c === '/' && n === '/') { while (i < txt.length && txt[i] !== '\n') i++; continue; }
+    if (c === '/' && n === '*') { i += 2; while (i < txt.length && !(txt[i] === '*' && txt[i + 1] === '/')) i++; i += 2; continue; }
+    if (c === '#') { while (i < txt.length && txt[i] !== '\n') i++; continue; }
+    out += c; i++;
+  }
+  out = out.replace(/\}\s*\{/g, '},{').replace(/,\s*([\]\}])/g, '$1');
+  out = out.replace(/"\s*\n\s*"/g, '","');
+  return JSON.parse(out);
+}
 fetch('results.json?t=' + Date.now(), { cache: 'no-store' })
   .then((r) => { if (!r.ok) throw new Error('missing'); return r.text(); })
   .then((txt) => {
     try {
-      const data = JSON.parse(txt);
+      const data = lenientParse(txt);
       recAll = (Array.isArray(data) ? data : []).filter((x) => x && typeof x === 'object' && x.date);
       renderRecords();
     } catch (e) {
