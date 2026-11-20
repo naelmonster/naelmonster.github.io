@@ -140,6 +140,23 @@
   .mu-title .nm { font-weight: 900; }
   .legend { margin-bottom: calc(8 * var(--u)); }
   .past details .legend { padding: calc(10 * var(--u)) calc(14 * var(--u)) 0; margin: 0; }
+  .opp-tabs { display: flex; gap: calc(8 * var(--u)); overflow-x: auto; scrollbar-width: none; margin: 0 calc(-44 * var(--u)); padding: 0 calc(44 * var(--u)); }
+  .opp-tabs::-webkit-scrollbar { display: none; }
+  .opp-tabs button { flex: 0 0 auto; min-height: 44px; border: 1px solid #2A2A2E; background: #19191C; color: #C9C6C0; border-radius: 999px; padding: 0 calc(16 * var(--u)); font: 900 max(13px, calc(16 * var(--u))) 'Noto Sans KR', sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: calc(8 * var(--u)); }
+  .opp-tabs button small { font-size: max(10px, calc(12 * var(--u))); font-weight: 700; color: #9C9CA3; }
+  .opp-tabs button .now { font-size: max(10px, calc(11 * var(--u))); font-weight: 900; color: #111113; background: #F2D594; border-radius: 999px; padding: 1px calc(7 * var(--u)); }
+  .opp-tabs button[aria-selected="true"] { background: #ECEAE6; color: #111113; border-color: #ECEAE6; }
+  .opp-tabs button[aria-selected="true"] small { color: #3A3A40; }
+  .periods { display: flex; flex-wrap: wrap; gap: calc(6 * var(--u)); margin-top: calc(4 * var(--u)); }
+  .periods span { font-size: max(11px, calc(13 * var(--u))); font-weight: 700; color: #C9C6C0; background: #26262B; border-radius: calc(6 * var(--u)); padding: calc(3 * var(--u)) calc(8 * var(--u)); }
+  .srv-btns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(8 * var(--u)); }
+  .srv-btns[hidden] { display: none; }
+  .srv-btns button { min-height: 48px; border: 1px solid #2A2A2E; background: #19191C; color: #ECEAE6; border-radius: calc(8 * var(--u)); padding: calc(10 * var(--u)) calc(6 * var(--u)); font-family: 'Noto Sans KR', sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(4 * var(--u)); }
+  .srv-btns button b { font-size: max(13px, calc(17 * var(--u))); font-weight: 900; }
+  .srv-btns button small { font-size: max(11px, calc(13 * var(--u))); font-weight: 700; color: #9C9CA3; font-variant-numeric: tabular-nums; }
+  .srv-btns button[aria-selected="true"] { background: #ECEAE6; color: #111113; border-color: #ECEAE6; }
+  .srv-btns button[aria-selected="true"] small { color: #3A3A40; }
+  .srv-empty { grid-column: 1 / -1; }
   .notice { border-top: 1px solid #2A2A2E; padding-top: calc(16 * var(--u)); display: flex; flex-direction: column; gap: calc(6 * var(--u)); font-size: max(12px, calc(15 * var(--u))); color: #C9C6C0; margin-top: calc(8 * var(--u)); }
   .notice b { font-size: max(11px, calc(13 * var(--u))); color: var(--accent); letter-spacing: 0.12em; }
 </style>
@@ -181,13 +198,13 @@
   </div>
 
   <div class="view" id="viewRecords" role="tabpanel" aria-labelledby="tabRec" hidden>
-    <section class="mu-head" id="muHead"></section>
     <div class="seg" role="tablist" aria-label="매칭 선택">
       <button type="button" role="tab" id="segNow" aria-selected="true">이번 매칭</button>
       <button type="button" role="tab" id="segPast" aria-selected="false">과거 매칭</button>
     </div>
-    <section id="muNow"></section>
-    <section id="muPast" hidden></section>
+    <div class="srv-btns" id="oppTabs" role="tablist" aria-label="상대 서버 선택" hidden></div>
+    <section class="mu-head" id="muHead"></section>
+    <section id="muBody"></section>
     <section id="artSec" hidden>
       <p class="sec-lab">아티팩트별 우리 점령률 · 전체 기록</p>
       <div class="rate-grid" id="artRates"></div>
@@ -364,12 +381,14 @@ function cells(r) {
     });
   });
 }
+const EXCLUDE_US = ['마르쿠탄'];
+let selOpp = null, pastMode = false;
 function buildMatchups() {
   const map = new Map();
-  recAll.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((r) => {
-    const key = `${r.us || ''}|${r.vs || ''}`;
-    if (!map.has(key)) map.set(key, { us: r.us || '우리', vs: r.vs || '상대', usRace: '', vsRace: '', wars: [] });
-    const m = map.get(key); if (r.usRace) m.usRace = r.usRace; if (r.vsRace) m.vsRace = r.vsRace; m.wars.push(r);
+  recAll.filter((r) => !EXCLUDE_US.includes(r.us)).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((r) => {
+    const key = r.vs || '상대';
+    if (!map.has(key)) map.set(key, { us: r.us || '우리', vs: key, usRace: '', vsRace: '', wars: [] });
+    const m = map.get(key); if (r.us) m.us = r.us; if (r.usRace) m.usRace = r.usRace; if (r.vsRace) m.vsRace = r.vsRace; m.wars.push(r);
   });
   muList = [...map.values()].map((m) => {
     let cu = 0, ct = 0;
@@ -377,10 +396,16 @@ function buildMatchups() {
       const f = cells(w).flat(); const u = f.filter((c) => c === 'U').length, th = f.filter((c) => c === 'T').length;
       cu += u; ct += th; Object.assign(w, { n: i + 1, cs: cells(w), du: u, dt: th, cu, ct });
     });
+    const periods = [];
+    m.wars.forEach((w) => {
+      const last = periods[periods.length - 1];
+      const t = Date.parse(w.date);
+      if (last && t - Date.parse(last.to) <= 10 * 86400000) last.to = w.date; else periods.push({ from: w.date, to: w.date });
+    });
     const usCamp = campOf(m.us), vsCamp = campOf(m.vs);
     const usColor = CAMP_COLOR[usCamp] || '#B48CFF';
     let vsColor = CAMP_COLOR[vsCamp] || '#5FA8FF'; if (vsColor === usColor) vsColor = usColor === '#5FA8FF' ? '#B48CFF' : '#5FA8FF';
-    return { ...m, cu, ct, usCamp, vsCamp, usColor, vsColor, first: m.wars[0].date, last: m.wars[m.wars.length - 1].date };
+    return { ...m, cu, ct, usCamp, vsCamp, usColor, vsColor, periods, first: m.wars[0].date, last: m.wars[m.wars.length - 1].date };
   }).sort((a, b) => String(b.last).localeCompare(String(a.last)));
 }
 function scoreEl(u, th, m) {
@@ -423,43 +448,49 @@ function table(m) {
   tb.append(tbody); return tb;
 }
 function verdict(u, th) { return u > th ? '우세' : u < th ? '열세' : '동률'; }
+el('segNow').addEventListener('click', () => { pastMode = false; renderRecords(); });
+el('segPast').addEventListener('click', () => { pastMode = true; selOpp = null; renderRecords(); });
 function renderRecords() {
   buildMatchups();
-  const head = el('muHead'), now = el('muNow'), past = el('muPast');
-  head.innerHTML = ''; now.innerHTML = ''; past.innerHTML = '';
+  const tabs = el('oppTabs'), head = el('muHead'), body = el('muBody');
+  tabs.innerHTML = ''; head.innerHTML = ''; body.innerHTML = '';
   if (!muList.length) {
+    tabs.hidden = true;
     head.append(mk('div', 'mu-title', '아티팩트 기록'), mk('div', 'mu-meta', '아직 기록이 없어요.'));
-    now.append(mk('div', 'empty2', '아티팩트 점령전이 끝나면 results.json에 기록을 추가해 주세요.'));
-    past.append(mk('div', 'empty2', '지난 매칭 기록이 없어요.'));
+    body.append(mk('div', 'empty2', '아티팩트 점령전이 끝나면 results.json에 기록을 추가해 주세요.'));
     el('artSec').hidden = true; return;
   }
-  const cur = muList[0];
+  const pastList = muList.slice(1);
+  el('segNow').setAttribute('aria-selected', String(!pastMode)); el('segPast').setAttribute('aria-selected', String(pastMode));
+  tabs.hidden = !pastMode;
+  if (pastMode) {
+    if (!pastList.length) {
+      tabs.append(mk('div', 'empty2 srv-empty', '지난 매칭 기록이 없어요.'));
+      el('artSec').hidden = true; return;
+    }
+    if (!selOpp || !pastList.some((m) => m.vs === selOpp)) selOpp = pastList[0].vs;
+    pastList.forEach((m) => {
+      const b = mk('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(m.vs === selOpp));
+      b.append(mk('b', null, m.vs));
+      b.addEventListener('click', () => { selOpp = m.vs; renderRecords(); });
+      tabs.append(b);
+    });
+  } else selOpp = muList[0].vs;
+  const cur = muList.find((m) => m.vs === selOpp);
   const title = mk('div', 'mu-title');
   const n1 = mk('span', 'nm', cur.us); n1.style.color = cur.usColor;
   const n2 = mk('span', 'nm', cur.vs); n2.style.color = cur.vsColor;
   title.append(n1, mk('span', 'camp', sideLabel(cur.usCamp, cur.usRace)), mk('span', 'x', 'VS'), n2, mk('span', 'camp', sideLabel(cur.vsCamp, cur.vsRace)));
   const tot = mk('div', 'mu-total'); tot.append('누적 ', scoreEl(cur.cu, cur.ct, cur), ` · ${verdict(cur.cu, cur.ct)}`);
-  head.append(title, mk('div', 'mu-meta', `${cur.wars.length}차전 진행 · ${fmtDate(cur.first)} ~ ${fmtDate(cur.last)}`), tot);
-  now.append(legendEl(cur), table(cur));
-  const olds = muList.slice(1);
-  if (!olds.length) past.append(mk('div', 'empty2', '지난 매칭 기록이 없어요.'));
-  else {
-    const wrap = mk('div', 'past');
-    olds.forEach((m) => {
-      const dt = mk('details'), sm = mk('summary');
-      const left = mk('div'); const pt = mk('div', 'pt');
-      const v = mk('span', null, m.vs); v.style.color = m.vsColor; pt.append('vs ', v);
-      left.append(pt, mk('div', 'pm', `${m.us} · ${fmtDate(m.first)} ~ ${fmtDate(m.last)} · ${m.wars.length}차전`));
-      const right = mk('div', 'pr'); right.append(scoreEl(m.cu, m.ct, m));
-      sm.append(left, right); dt.append(sm, legendEl(m), table(m)); wrap.append(dt);
-    });
-    past.append(wrap);
-  }
+  const per = mk('div', 'periods');
+  cur.periods.forEach((p) => per.append(mk('span', null, p.from === p.to ? fmtDate(p.from) : `${fmtDate(p.from)} ~ ${fmtDate(p.to)}`)));
+  head.append(title, mk('div', 'mu-meta', `총 ${cur.wars.length}차전 · 매칭 ${cur.periods.length}회`), per, tot);
+  body.append(legendEl(cur), table(cur));
   const rates = el('artRates'); rates.innerHTML = '';
   ZONES.forEach((zn, zi) => {
     const line = mk('div', 'rate-zone'); line.append(mk('span', null, zn.name));
     zn.arts.forEach((a, ai) => {
-      const vals = recAll.map((r) => cells(r)[zi][ai]).filter((v) => v !== 'N');
+      const vals = recAll.filter((r) => !EXCLUDE_US.includes(r.us)).map((r) => cells(r)[zi][ai]).filter((v) => v !== 'N');
       const w = vals.filter((v) => v === 'U').length;
       const box = mk('div', 'rate');
       box.append(mk('b', null, a), mk('strong', null, vals.length ? Math.round((w / vals.length) * 100) + '%' : '–'), mk('small', null, `${w}/${vals.length}`));
@@ -469,12 +500,6 @@ function renderRecords() {
   });
   el('artSec').hidden = false;
 }
-function showSeg(pastOn) {
-  el('segNow').setAttribute('aria-selected', String(!pastOn)); el('segPast').setAttribute('aria-selected', String(pastOn));
-  el('muNow').hidden = pastOn; el('muPast').hidden = !pastOn;
-}
-el('segNow').addEventListener('click', () => showSeg(false));
-el('segPast').addEventListener('click', () => showSeg(true));
 function lenientParse(txt) {
   let out = '', i = 0, inStr = false;
   while (i < txt.length) {
