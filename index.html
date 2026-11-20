@@ -114,7 +114,7 @@
   .dot { display: inline-block; width: max(10px, calc(14 * var(--u))); height: max(10px, calc(14 * var(--u))); border-radius: 50%; }
   .dot.ma { background: #B48CFF; box-shadow: 0 0 0 2px rgba(180,140,255,0.25); }
   .dot.cheon { background: #5FA8FF; box-shadow: 0 0 0 2px rgba(95,168,255,0.25); }
-  .dot.none { background: #3A3A40; }
+  .dot.err { background: transparent; border: 2px dashed #6B6B72; box-sizing: border-box; }
   .wt { width: 100%; border-collapse: separate; border-spacing: 0; background: #19191C; border-radius: calc(12 * var(--u)); overflow: hidden; table-layout: fixed; }
   .wt th, .wt td { text-align: center; padding: calc(10 * var(--u)) 0; border-bottom: 1px solid #232327; }
   .wt tr:last-child td { border-bottom: 0; }
@@ -157,6 +157,12 @@
   .srv-btns button[aria-selected="true"] { background: #ECEAE6; color: #111113; border-color: #ECEAE6; }
   .srv-btns button[aria-selected="true"] small { color: #3A3A40; }
   .srv-empty { grid-column: 1 / -1; }
+  .local-load { background: #2A2240; border: 1px solid #B48CFF; border-radius: calc(12 * var(--u)); padding: calc(16 * var(--u)); display: flex; flex-direction: column; gap: calc(10 * var(--u)); font-size: max(13px, calc(15 * var(--u))); }
+  .local-load[hidden] { display: none; }
+  .local-load p { margin: 0; color: #ECEAE6; font-weight: 700; }
+  .local-load small { color: #C9C6C0; font-size: max(11px, calc(13 * var(--u))); }
+  .pick { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: #ECEAE6; color: #111113; border-radius: calc(10 * var(--u)); font-weight: 900; cursor: pointer; }
+  .pick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
   .notice { border-top: 1px solid #2A2A2E; padding-top: calc(16 * var(--u)); display: flex; flex-direction: column; gap: calc(6 * var(--u)); font-size: max(12px, calc(15 * var(--u))); color: #C9C6C0; margin-top: calc(8 * var(--u)); }
   .notice b { font-size: max(11px, calc(13 * var(--u))); color: var(--accent); letter-spacing: 0.12em; }
 </style>
@@ -203,6 +209,11 @@
       <button type="button" role="tab" id="segPast" aria-selected="false">과거 매칭</button>
     </div>
     <div class="srv-btns" id="oppTabs" role="tablist" aria-label="상대 서버 선택" hidden></div>
+    <section class="local-load" id="localLoad" hidden>
+      <p>내 PC에서 파일을 바로 열었을 때는 전적 파일을 직접 골라야 해요.</p>
+      <label class="pick">results.json 파일 선택<input type="file" id="pickFile" accept=".json,application/json"></label>
+      <small id="pickMsg">파일을 고친 뒤에는 다시 선택하면 바로 반영돼요.</small>
+    </section>
     <section class="mu-head" id="muHead"></section>
     <section id="muBody"></section>
     <section id="artSec" hidden>
@@ -374,10 +385,10 @@ function cells(r) {
   return ZONES.map((zn) => {
     const s = String(r[zn.name] || '').replace(/\s/g, '').split('');
     return [0, 1, 2].map((i) => {
-      const c = s[i] || '-';
+      const c = s[i] || '';
       if (c === '우') return 'U'; if (c === '상') return 'T';
       if (c === '마' || c === '천') return c === ourRace ? 'U' : 'T';
-      return 'N';
+      return 'E';
     });
   });
 }
@@ -390,7 +401,9 @@ function buildMatchups() {
     if (!map.has(key)) map.set(key, { us: r.us || '우리', vs: key, usRace: '', vsRace: '', wars: [] });
     const m = map.get(key); if (r.us) m.us = r.us; if (r.usRace) m.usRace = r.usRace; if (r.vsRace) m.vsRace = r.vsRace; m.wars.push(r);
   });
+  const ourRaceAll = (recAll.filter((r) => !EXCLUDE_US.includes(r.us) && r.usRace).pop() || {}).usRace || '';
   muList = [...map.values()].map((m) => {
+    if (!m.usRace) m.usRace = ourRaceAll;
     let cu = 0, ct = 0;
     m.wars.forEach((w, i) => {
       const f = cells(w).flat(); const u = f.filter((c) => c === 'U').length, th = f.filter((c) => c === 'T').length;
@@ -419,8 +432,7 @@ function legendEl(m) {
   const lg = mk('div', 'legend');
   const a = mk('span'); a.append(dotEl(m.usColor), m.us);
   const b = mk('span'); b.append(dotEl(m.vsColor), m.vs);
-  const c = mk('span'); c.append(mk('i', 'dot none'), '미점령');
-  lg.append(a, b, c); return lg;
+  lg.append(a, b); return lg;
 }
 function sideLabel(camp, race) { return [camp, race].filter(Boolean).join(' · '); }
 function table(m) {
@@ -437,8 +449,8 @@ function table(m) {
     const td = mk('td', 'c-date'); td.append(mk('b', null, `${w.n}차전`), mk('small', null, fmtDate(w.date))); tr.append(td);
     w.cs.forEach((z, zi) => z.forEach((c, ci) => {
       const cell = mk('td', zi && !ci ? 'gap' : '');
-      const d = c === 'U' ? dotEl(m.usColor) : c === 'T' ? dotEl(m.vsColor) : mk('i', 'dot none');
-      d.setAttribute('aria-label', `${ZONES[zi].arts[ci]} ${c === 'U' ? m.us : c === 'T' ? m.vs : '미점령'}`);
+      const d = c === 'U' ? dotEl(m.usColor) : c === 'T' ? dotEl(m.vsColor) : mk('i', 'dot err');
+      d.setAttribute('aria-label', `${ZONES[zi].arts[ci]} ${c === 'U' ? m.us : c === 'T' ? m.vs : '입력 오류'}`);
       cell.append(d); tr.append(cell);
     }));
     const s1 = mk('td', 'c-sc gap'); s1.append(scoreEl(w.du, w.dt, m));
@@ -490,7 +502,7 @@ function renderRecords() {
   ZONES.forEach((zn, zi) => {
     const line = mk('div', 'rate-zone'); line.append(mk('span', null, zn.name));
     zn.arts.forEach((a, ai) => {
-      const vals = recAll.filter((r) => !EXCLUDE_US.includes(r.us)).map((r) => cells(r)[zi][ai]).filter((v) => v !== 'N');
+      const vals = recAll.filter((r) => !EXCLUDE_US.includes(r.us)).map((r) => cells(r)[zi][ai]).filter((v) => v !== 'E');
       const w = vals.filter((v) => v === 'U').length;
       const box = mk('div', 'rate');
       box.append(mk('b', null, a), mk('strong', null, vals.length ? Math.round((w / vals.length) * 100) + '%' : '–'), mk('small', null, `${w}/${vals.length}`));
@@ -515,18 +527,27 @@ function lenientParse(txt) {
   out = out.replace(/"\s*\n\s*"/g, '","');
   return JSON.parse(out);
 }
+function loadText(txt) {
+  try {
+    const data = lenientParse(txt);
+    recAll = (Array.isArray(data) ? data : []).filter((x) => x && typeof x === 'object' && x.date);
+    renderRecords();
+    return true;
+  } catch (e) {
+    el('muHead').replaceChildren(mk('div', 'mu-title', '아티팩트 기록'), mk('div', 'mu-meta', '전적 파일(results.json) 형식에 오류가 있어요. 쉼표나 따옴표를 확인해 주세요.'));
+    return false;
+  }
+}
+el('pickFile').addEventListener('change', (ev) => {
+  const f = ev.target.files && ev.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { const ok = loadText(String(rd.result)); el('pickMsg').textContent = ok ? `${f.name} 불러옴 · 고친 뒤 다시 선택하면 반영돼요.` : `${f.name} 형식 오류 · 쉼표나 따옴표를 확인해 주세요.`; ev.target.value = ''; };
+  rd.readAsText(f, 'utf-8');
+});
 fetch('results.json?t=' + Date.now(), { cache: 'no-store' })
   .then((r) => { if (!r.ok) throw new Error('missing'); return r.text(); })
-  .then((txt) => {
-    try {
-      const data = lenientParse(txt);
-      recAll = (Array.isArray(data) ? data : []).filter((x) => x && typeof x === 'object' && x.date);
-      renderRecords();
-    } catch (e) {
-      el('muHead').replaceChildren(mk('div', 'mu-title', '아티팩트 기록'), mk('div', 'mu-meta', '전적 파일(results.json) 형식에 오류가 있어요. 쉼표나 따옴표를 확인해 주세요.'));
-    }
-  })
-  .catch(() => {});
+  .then((txt) => loadText(txt))
+  .catch(() => { if (location.protocol === 'file:') el('localLoad').hidden = false; });
 
 function showTab(rec) {
   el('tabSched').setAttribute('aria-selected', String(!rec));
