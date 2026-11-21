@@ -47,6 +47,7 @@
   .main .row span { font-size: calc(64 * var(--u)); line-height: 1; font-weight: 900; letter-spacing: -0.01em; }
   .main .row .n { color: var(--accent); }
   .main .col { position: relative; display: inline-block; }
+  .main .row .col .rsub.left { left: 0; transform: none; }
   .main .row:has(.col) { margin-bottom: calc(46 * var(--u)); }
   .main .row .col .rsub { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font-size: max(12px, calc(24 * var(--u))); font-weight: 700; color: #C9C6C0; line-height: 1.3; margin-top: calc(6 * var(--u)); letter-spacing: 0; }
   .main .sub { font-size: max(13px, calc(17 * var(--u))); color: #C9C6C0; }
@@ -248,6 +249,7 @@ function mainsFor(c) {
 }
 
 const EXTRA = {
+  '2026-11-21': [{ time: '20:00', label: '시공 공격 퀘스트', sub: '키스크 위치: 비행정 오른쪽 앞 바퀴', color: '#7FC4FF' }],
   '2026-11-25': [{ replace: true, label: '어비스 · 시공 매칭 변경', short: '매칭 변경', color: '#F2D594' }],
   '2026-11-14': [{ time: '23:00', label: '시공 공격', color: '#B48CFF' }],
   '2026-11-17': [{ banner: true, label: '서버 이전 준비', sub: '내일(수) 20:00 서버 이전 전까지 준비를 완료해 주세요.' }],
@@ -349,7 +351,7 @@ function render() {
       const t1 = mk('span', null, r.time); if (ex.length) t1.style.fontSize = 'calc(48 * var(--u))';
       if (!r.time) { n.style.fontSize = 'calc(48 * var(--u))'; }
       if (r.sub) {
-        const col = mk('span', 'col'); col.append(n, mk('span', 'rsub', r.sub));
+        const col = mk('span', 'col'); const rs = mk('span', 'rsub', r.sub); if (r.sub.length > r.label.length * 1.6) rs.classList.add('left'); col.append(n, rs);
         row.append(t1, col); row.style.marginBottom = 'calc(46 * var(--u))';
       } else if (r.time) row.append(t1, n); else row.append(n);
       main.append(row);
@@ -372,6 +374,7 @@ function render() {
 const ZONES = [{ name: '하층', arts: ['뿌리', '시엘', '유황'] }, { name: '중층', arts: ['중앙', '늪지', '고목'] }];
 const WEST = ['시엘','바이젤','트리니엘','카이시넬','마르쿠탄','유스티엘','아리엘','프레기온','메스람타에다','나니아','루드라','무닌','페르노스','오다르','다미누','카사카','바카르마','크로메데','챈가룽','이슈타르','포에타'];
 const EAST = ['지켈','바바룽','아스펠','루미엘','이스할겐','에레슈키갈','네몬','코치룽','울고른','젠카카','브리트라','파프니르','콰이링','인드나흐','루터스','타하바타','네자칸','하달','히타니에','이스라펠','티아마트'];
+// 서버 진영 목록: 11/11 업데이트 공지 매칭표 기준. 매칭마다 진영이 바뀌면 아래 [보류] 주석 참고.
 const CAMP_COLOR = { '동부': '#B48CFF', '서부': '#5FA8FF' };
 const campOf = (s) => (EAST.includes(s) ? '동부' : WEST.includes(s) ? '서부' : '');
 let recAll = [], muList = [];
@@ -416,6 +419,12 @@ function buildMatchups() {
       if (last && t - Date.parse(last.to) <= 10 * 86400000) last.to = w.date; else periods.push({ from: w.date, to: w.date });
     });
     const usCamp = campOf(m.us), vsCamp = campOf(m.vs);
+    /* [보류] 매칭별 진영 직접 지정 (서버 진영이 매칭마다 바뀔 경우 적용)
+     * results.json 기록에 "usCamp": "동부", "vsCamp": "서부" 를 적으면 서버 목록보다 우선 적용.
+     * 적용 시 위 줄 대신 아래 두 줄 사용:
+     * const lastWar = m.wars[m.wars.length - 1];
+     * const usCamp = lastWar.usCamp || campOf(m.us), vsCamp = lastWar.vsCamp || campOf(m.vs);
+     */
     const usColor = CAMP_COLOR[usCamp] || '#B48CFF';
     let vsColor = CAMP_COLOR[vsCamp] || '#5FA8FF'; if (vsColor === usColor) vsColor = usColor === '#5FA8FF' ? '#B48CFF' : '#5FA8FF';
     return { ...m, cu, ct, usCamp, vsCamp, usColor, vsColor, periods, first: m.wars[0].date, last: m.wars[m.wars.length - 1].date };
