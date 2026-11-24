@@ -234,7 +234,8 @@
 <script>
 const PERIODS = [
   { from: '0000-00-00', faction: '서부', artifactTime: '22:30', nahmaTime: '22:30', artifactServer: '이스할겐 (동부)', sigongServer: '바이젤' },
-  { from: '2026-11-18', faction: '동부', artifactTime: '23:00', nahmaTime: '23:00', artifactServer: '무닌', sigongServer: '코치룽', artColor: '#4A8DF8', sigColor: '#7FC4FF' }
+  { from: '2026-11-18', faction: '동부', artifactTime: '23:00', nahmaTime: '23:00', artifactServer: '무닌', sigongServer: '코치룽', artColor: '#4A8DF8', sigColor: '#7FC4FF' },
+  { from: '2026-11-25', faction: '동부', artifactTime: '23:00', nahmaTime: '23:00', artifactServer: '네자칸', sigongServer: '메스람타에다', artColor: '#4A8DF8', sigColor: '#7FC4FF' }
 ];
 function cfgFor(key) { let c = PERIODS[0]; for (const p of PERIODS) if (key >= p.from) c = p; return c; }
 function mainsFor(c) {
@@ -250,7 +251,7 @@ function mainsFor(c) {
 
 const EXTRA = {
   '2026-11-21': [{ time: '20:00', label: '시공 공격 퀘스트', sub: '키스크 위치: 비행정 오른쪽 앞 바퀴', color: '#7FC4FF' }],
-  '2026-11-25': [{ replace: true, label: '어비스 · 시공 매칭 변경', short: '매칭 변경', color: '#F2D594' }],
+  '2026-11-25': [{ time: '', label: '어비스 · 시공 매칭 변경', color: '#F2D594' }],
   '2026-11-14': [{ time: '23:00', label: '시공 공격', color: '#B48CFF' }],
   '2026-11-17': [{ banner: true, label: '서버 이전 준비', sub: '내일(수) 20:00 서버 이전 전까지 준비를 완료해 주세요.' }],
   '2026-11-18': [{ banner: true, label: '서버 이전 준비', sub: '오늘 20:00 서버 이전 전까지 준비를 완료해 주세요.' }, { time: '20:00', label: '서버이전', sub: '마르쿠탄 → 파프니르', color: '#F2D594' }]
@@ -376,6 +377,8 @@ const WEST = ['시엘','바이젤','트리니엘','카이시넬','마르쿠탄',
 const EAST = ['지켈','바바룽','아스펠','루미엘','이스할겐','에레슈키갈','네몬','코치룽','울고른','젠카카','브리트라','파프니르','콰이링','인드나흐','루터스','타하바타','네자칸','하달','히타니에','이스라펠','티아마트'];
 // 서버 진영 목록: 11/11 업데이트 공지 매칭표 기준. 매칭마다 진영이 바뀌면 아래 [보류] 주석 참고.
 const CAMP_COLOR = { '동부': '#B48CFF', '서부': '#5FA8FF' };
+// 매칭 변경으로 진영이 바뀐 서버 (기록에 usCamp/vsCamp를 적으면 그 값이 우선)
+const CAMP_FIX = { '네자칸': '서부' };
 const campOf = (s) => (EAST.includes(s) ? '동부' : WEST.includes(s) ? '서부' : '');
 let recAll = [], muList = [];
 function fmtDate(s) {
@@ -418,13 +421,9 @@ function buildMatchups() {
       const t = Date.parse(w.date);
       if (last && t - Date.parse(last.to) <= 10 * 86400000) last.to = w.date; else periods.push({ from: w.date, to: w.date });
     });
-    const usCamp = campOf(m.us), vsCamp = campOf(m.vs);
-    /* [보류] 매칭별 진영 직접 지정 (서버 진영이 매칭마다 바뀔 경우 적용)
-     * results.json 기록에 "usCamp": "동부", "vsCamp": "서부" 를 적으면 서버 목록보다 우선 적용.
-     * 적용 시 위 줄 대신 아래 두 줄 사용:
-     * const lastWar = m.wars[m.wars.length - 1];
-     * const usCamp = lastWar.usCamp || campOf(m.us), vsCamp = lastWar.vsCamp || campOf(m.vs);
-     */
+    const lastWar = m.wars[m.wars.length - 1];
+    const usCamp = lastWar.usCamp || CAMP_FIX[m.us] || campOf(m.us), vsCamp = lastWar.vsCamp || CAMP_FIX[m.vs] || campOf(m.vs);
+    /* 매칭별 진영: 기록의 usCamp/vsCamp → CAMP_FIX → 11/11 공지 서버 목록 순서로 결정 */
     const usColor = CAMP_COLOR[usCamp] || '#B48CFF';
     let vsColor = CAMP_COLOR[vsCamp] || '#5FA8FF'; if (vsColor === usColor) vsColor = usColor === '#5FA8FF' ? '#B48CFF' : '#5FA8FF';
     return { ...m, cu, ct, usCamp, vsCamp, usColor, vsColor, periods, first: m.wars[0].date, last: m.wars[m.wars.length - 1].date };
